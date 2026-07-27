@@ -1,0 +1,79 @@
+name: "argos"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  CI: true
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+concurrency:
+  group: "${{ github.event.pull_request.number }}-${{ github.ref_name }}-${{ github.workflow }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Argos authenticates with a short lived OpenID Connect token, so there is no
+  # secret to store on the repository.
+  id-token: write
+
+jobs:
+  argos:
+    name: "argos-visual-testing"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Argos resolves the base build by walking the commit history.
+          # `blob:none` keeps that history without the contents of past
+          # revisions, which matters on a repository this size.
+          fetch-depth: 0
+          filter: blob:none
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/0.11.3/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: install gradio locally
+        # `scripts/generate_theme.py` imports `gradio.themes`, so the library
+        # has to be importable before the Storybook can be built.
+        run: |
+          uv venv --allow-existing venv --python=3.10
+          . venv/bin/activate
+          uv pip install -e client/python
+          uv pip install -e .
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: install frontend dependencies
+        run: pnpm i --frozen-lockfile --ignore-scripts
+      - name: build css
+        run: pnpm css
+      - name: build client
+        run: pnpm --filter @gradio/client build
+      - name: generate theme.css
+        run: |
+          . venv/bin/activate
+          python scripts/generate_theme.py --outfile js/storybook/theme.css
+      - name: build storybook
+        run: |
+          . venv/bin/activate
+          pnpm build-storybook --quiet
+      - name: install argos dependencies
+        # Installed under `argos/` with npm so the pnpm workspace and its
+        # lockfile stay untouched.
+        run: npm install --prefix argos --no-audit --no-fund
+      - name: install playwright browser
+        run: ./argos/node_modules/.bin/playwright install chromium --with-deps
+      - name: capture the storybook
+        run: ./argos/node_modules/.bin/playwright test --config argos/playwright.config.ts

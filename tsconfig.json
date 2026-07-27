@@ -35,6 +35,7 @@
 		"target": "es2022"
 	},
 	"exclude": [
+		"argos/**/*",
 		"**/_website/**/*",
 		"**/app/**/*",
 		"**/dist/**/*",
