@@ -24,10 +24,10 @@
 	class="label-wrap"
 	class:open
 >
-	<span>{label}</span>
 	<span style:transform={open ? "rotate(0)" : "rotate(90deg)"} class="icon">
 		▼
 	</span>
+	<span>{label}</span>
 </button>
 <div data-testid="accordion-content" style:display={open ? "block" : "none"}>
 	<slot />
@@ -40,7 +40,8 @@
 	}
 	.label-wrap {
 		display: flex;
-		justify-content: space-between;
+		justify-content: flex-start;
+		gap: var(--size-2);
 		cursor: pointer;
 		width: var(--size-full);
 		color: var(--accordion-text-color);
